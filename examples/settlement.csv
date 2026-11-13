@@ -1,0 +1,4 @@
+transaction_id,amount,currency
+T001,10.0,TRY
+T002,125.40,TRY
+T004,7.00,EUR
