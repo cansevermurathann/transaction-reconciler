@@ -6,6 +6,9 @@ from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 import sys
+import sqlite3
+
+from review import save_run
 
 COLUMNS = {"transaction_id", "amount", "currency"}
 
@@ -64,10 +67,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("ledger", type=Path)
     parser.add_argument("settlement", type=Path)
+    parser.add_argument("--db", type=Path, help="save the report to a review database")
     args = parser.parse_args()
     try:
         report = reconcile(read_transactions(args.ledger), read_transactions(args.settlement))
-    except (OSError, ValueError, csv.Error) as error:
+        if args.db is not None:
+            run_id = save_run(args.db, report)
+            print(f"Saved run {run_id}", file=sys.stderr)
+    except (OSError, ValueError, csv.Error, sqlite3.Error) as error:
         print(error, file=sys.stderr)
         return 2
     print(json.dumps(report, indent=2))

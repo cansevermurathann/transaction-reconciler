@@ -24,3 +24,21 @@ The JSON report is written to stdout. Invalid files are reported on stderr with 
 | 0 | All transactions match |
 | 1 | Reconciliation differences found |
 | 2 | Invalid input or unreadable file |
+
+## Review workflow
+
+Use `--db` to save a reconciliation run. Each run keeps its original JSON
+report and a UTC creation timestamp. The command still prints the report to
+stdout and returns exit code 1 when it finds differences.
+
+```sh
+python reconcile.py examples/ledger.csv examples/settlement.csv --db review.sqlite3
+python review.py review.sqlite3 list
+python review.py review.sqlite3 mark-reviewed 1 --note "Checked settlement against source export"
+python review.py review.sqlite3 list
+```
+
+Use the ID shown by the list command when reviewing an existing database.
+The review command records a note and UTC timestamp once per run. A review
+records that someone inspected the differences. The original report stays
+available for reference.
