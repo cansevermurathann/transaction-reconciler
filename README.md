@@ -42,3 +42,17 @@ Use the ID shown by the list command when reviewing an existing database.
 The review command records a note and UTC timestamp once per run. A review
 records that someone inspected the differences. The original report stays
 available for reference.
+
+### Review individual differences
+
+List the discrepancies for a saved run and record a note for one transaction.
+
+```sh
+python review.py review.sqlite3 differences 1
+python review.py review.sqlite3 mark-difference-reviewed 1 T002 --note "Confirmed amount with provider"
+python review.py review.sqlite3 differences 1
+```
+
+A transaction can be reviewed once per run. Reviews are stored alongside the
+original report. Existing databases are supported, and run-level review status
+is independent of transaction-level reviews.
