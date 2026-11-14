@@ -64,3 +64,38 @@ class ReviewWorkflowTests(unittest.TestCase):
                 self.assertEqual(items["T002"]["ledger"]["amount"], "125.45")
                 self.assertIsNone(items["T003"]["reviewed_at"])
                 self.assertIsNone(items["T004"]["reviewed_at"])
+
+    def test_difference_queue_filters_saved_reviews(self):
+        from review import save_run
+
+        root = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "queue.sqlite3"
+            run_id = save_run(path, {
+                "matched": 0,
+                "missing_from_settlement": ["T001", "T002"],
+                "missing_from_ledger": [],
+                "mismatched": [],
+            })
+
+            def cli(*args):
+                result = subprocess.run(
+                    [sys.executable, "review.py", str(path), *args],
+                    cwd=root, capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return result.stdout
+
+            def ids(status):
+                output = cli("differences", str(run_id), "--status", status)
+                return [item["transaction_id"] for item in json.loads(output)]
+
+            original = path.read_bytes()
+            self.assertEqual(ids("open"), ["T001", "T002"])
+            self.assertEqual(ids("reviewed"), [])
+            self.assertEqual(path.read_bytes(), original)
+
+            cli("mark-difference-reviewed", str(run_id), "T001", "--note", "Checked")
+            self.assertEqual(ids("all"), ["T001", "T002"])
+            self.assertEqual(ids("open"), ["T002"])
+            self.assertEqual(ids("reviewed"), ["T001"])

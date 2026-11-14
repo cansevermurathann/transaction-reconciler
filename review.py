@@ -54,21 +54,16 @@ def list_differences(db, run_id):
     if row is None:
         raise ValueError(f"Run {run_id} does not exist.")
 
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS difference_reviews (
-            run_id INTEGER NOT NULL REFERENCES runs(id),
-            transaction_id TEXT NOT NULL,
-            review_note TEXT NOT NULL,
-            reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (run_id, transaction_id)
-        )
-    """)
+    review_table = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'difference_reviews'"
+    ).fetchone()
+    review_rows = db.execute(
+        "SELECT transaction_id, review_note, reviewed_at FROM difference_reviews WHERE run_id = ?",
+        (run_id,),
+    ) if review_table else ()
     reviews = {
         transaction_id: {"review_note": note, "reviewed_at": timestamp}
-        for transaction_id, note, timestamp in db.execute(
-            "SELECT transaction_id, review_note, reviewed_at FROM difference_reviews WHERE run_id = ?",
-            (run_id,),
-        )
+        for transaction_id, note, timestamp in review_rows
     }
     report = json.loads(row[0])
     differences = [
@@ -85,6 +80,15 @@ def list_differences(db, run_id):
 def mark_difference_reviewed(db, run_id, transaction_id, note):
     if not any(item["transaction_id"] == transaction_id for item in list_differences(db, run_id)):
         raise ValueError(f"Transaction {transaction_id} is not a difference in run {run_id}.")
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS difference_reviews (
+            run_id INTEGER NOT NULL REFERENCES runs(id),
+            transaction_id TEXT NOT NULL,
+            review_note TEXT NOT NULL,
+            reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (run_id, transaction_id)
+        )
+    """)
     cursor = db.execute("""
         INSERT INTO difference_reviews (run_id, transaction_id, review_note)
         VALUES (?, ?, ?)
@@ -104,6 +108,7 @@ def main():
     mark.add_argument("--note", required=True)
     differences = commands.add_parser("differences")
     differences.add_argument("run_id", type=int)
+    differences.add_argument("--status", choices=("all", "open", "reviewed"), default="all")
     mark_difference = commands.add_parser("mark-difference-reviewed")
     mark_difference.add_argument("run_id", type=int)
     mark_difference.add_argument("transaction_id")
@@ -111,12 +116,17 @@ def main():
     args = parser.parse_args()
 
     try:
-        with closing(sqlite3.connect(args.db.resolve().as_uri() + "?mode=rw", uri=True)) as db, db:
+        mode = "ro" if args.command in ("list", "differences") else "rw"
+        with closing(sqlite3.connect(args.db.resolve().as_uri() + f"?mode={mode}", uri=True)) as db, db:
             db.execute("PRAGMA foreign_keys = ON")
             if args.command == "list":
                 print(json.dumps(list_runs(db), indent=2))
             elif args.command == "differences":
-                print(json.dumps(list_differences(db, args.run_id), indent=2))
+                items = list_differences(db, args.run_id)
+                if args.status != "all":
+                    reviewed = args.status == "reviewed"
+                    items = [item for item in items if (item["reviewed_at"] is not None) == reviewed]
+                print(json.dumps(items, indent=2))
             else:
                 note = args.note.strip()
                 if not note:

@@ -56,3 +56,11 @@ python review.py review.sqlite3 differences 1
 A transaction can be reviewed once per run. Reviews are stored alongside the
 original report. Existing databases are supported, and run-level review status
 is independent of transaction-level reviews.
+
+Use `--status open` for the remaining review queue or `--status reviewed` to
+see completed reviews. With no filter, the command returns all differences.
+Listing runs or differences opens the database in read-only mode.
+
+```sh
+python review.py review.sqlite3 differences 1 --status open
+```
