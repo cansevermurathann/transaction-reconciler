@@ -64,3 +64,13 @@ Listing runs or differences opens the database in read-only mode.
 ```sh
 python review.py review.sqlite3 differences 1 --status open
 ```
+
+## Continuous integration
+
+GitHub Actions runs the unit and CLI integration tests on Linux and Windows
+using Python 3.10 and 3.15. Pull requests to `main` and pushes to `main`
+trigger the same test command used locally.
+
+```sh
+python -m unittest -v
+```
