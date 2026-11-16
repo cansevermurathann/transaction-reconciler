@@ -68,11 +68,14 @@ def main():
     parser.add_argument("ledger", type=Path)
     parser.add_argument("settlement", type=Path)
     parser.add_argument("--db", type=Path, help="save the report to a review database")
+    parser.add_argument("--run-key", help="reuse a saved run for the same reconciliation report")
     args = parser.parse_args()
+    if args.run_key is not None and (args.db is None or not args.run_key.strip()):
+        parser.error("--run-key requires --db and a non-empty key")
     try:
         report = reconcile(read_transactions(args.ledger), read_transactions(args.settlement))
         if args.db is not None:
-            run_id = save_run(args.db, report)
+            run_id = save_run(args.db, report, args.run_key)
             print(f"Saved run {run_id}", file=sys.stderr)
     except (OSError, ValueError, csv.Error, sqlite3.Error) as error:
         print(error, file=sys.stderr)

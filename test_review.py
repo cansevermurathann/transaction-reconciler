@@ -99,3 +99,23 @@ class ReviewWorkflowTests(unittest.TestCase):
             self.assertEqual(ids("all"), ["T001", "T002"])
             self.assertEqual(ids("open"), ["T002"])
             self.assertEqual(ids("reviewed"), ["T001"])
+
+    def test_batch_key_reuses_run_and_rejects_conflicting_report(self):
+        import sqlite3
+        from contextlib import closing
+
+        from review import list_runs, mark_reviewed, save_run
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "batches.sqlite3"
+            report = {"matched": 1}
+            first = save_run(path, report)
+            keyed = save_run(path, report, "batch-001")
+            with closing(sqlite3.connect(path)) as db, db:
+                mark_reviewed(db, keyed, "Checked")
+            self.assertEqual(save_run(path, report, "batch-001"), keyed)
+            with self.assertRaisesRegex(ValueError, "different reconciliation report"):
+                save_run(path, {"matched": 2}, "batch-001")
+            with closing(sqlite3.connect(path)) as db:
+                self.assertEqual([run["id"] for run in list_runs(db)], [keyed, first])
+                self.assertEqual(list_runs(db)[0]["review_note"], "Checked")

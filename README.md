@@ -74,3 +74,17 @@ trigger the same test command used locally.
 ```sh
 python -m unittest -v
 ```
+
+## Retry a reconciliation batch
+
+Supply a stable key for each logical batch when saving a report.
+
+```sh
+python reconcile.py examples/ledger.csv examples/settlement.csv --db review.sqlite3 --run-key batch-001
+```
+
+Repeating the same key with the same report returns the existing run ID and
+preserves its reviews. Reusing a key with a different report returns exit code
+2 and keeps the original run. The key identifies the report, so differences in
+input files that leave the report unchanged do not cause a conflict.
+Without a key, each save creates a new run.

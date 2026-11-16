@@ -8,8 +8,10 @@ import sqlite3
 import sys
 
 
-def save_run(path, report):
+def save_run(path, report, run_key=None):
     with closing(sqlite3.connect(path)) as db, db:
+        db.execute("PRAGMA foreign_keys = ON")
+        db.execute("BEGIN IMMEDIATE")
         db.execute("""
             CREATE TABLE IF NOT EXISTS runs (
                 id INTEGER PRIMARY KEY,
@@ -19,8 +21,27 @@ def save_run(path, report):
                 review_note TEXT
             )
         """)
+        if run_key is not None:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS run_keys (
+                    key TEXT PRIMARY KEY,
+                    run_id INTEGER NOT NULL REFERENCES runs(id)
+                )
+            """)
+            existing = db.execute("""
+                SELECT runs.id, runs.report FROM run_keys
+                JOIN runs ON runs.id = run_keys.run_id WHERE run_keys.key = ?
+            """, (run_key,)).fetchone()
+            if existing is not None:
+                if json.loads(existing[1]) != report:
+                    raise ValueError("Run key already exists with a different reconciliation report.")
+                return existing[0]
+
         cursor = db.execute("INSERT INTO runs (report) VALUES (?)", (json.dumps(report),))
-        return cursor.lastrowid
+        run_id = cursor.lastrowid
+        if run_key is not None:
+            db.execute("INSERT INTO run_keys (key, run_id) VALUES (?, ?)", (run_key, run_id))
+        return run_id
 
 
 def list_runs(db):
