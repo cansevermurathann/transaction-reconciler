@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import closing
+import csv
 import json
 from pathlib import Path
 import sqlite3
@@ -119,6 +120,30 @@ def mark_difference_reviewed(db, run_id, transaction_id, note):
         raise ValueError(f"Transaction {transaction_id} has already been reviewed in run {run_id}.")
 
 
+def spreadsheet_text(value):
+    if value and (value.startswith(("\t", "\r", "\n")) or
+                  value.lstrip().startswith(("=", "+", "-", "@", "＝", "＋", "－", "＠"))):
+        return "'" + value
+    return value
+
+
+def write_differences_csv(items, stream):
+    writer = csv.writer(stream, quoting=csv.QUOTE_ALL)
+    writer.writerow([
+        "transaction_id", "kind", "ledger_amount", "ledger_currency",
+        "settlement_amount", "settlement_currency", "reviewed_at", "review_note",
+    ])
+    for item in items:
+        ledger = item.get("ledger", {})
+        settlement = item.get("settlement", {})
+        writer.writerow([
+            spreadsheet_text(item["transaction_id"]), item["kind"],
+            ledger.get("amount"), ledger.get("currency"),
+            settlement.get("amount"), settlement.get("currency"),
+            item["reviewed_at"], spreadsheet_text(item["review_note"]),
+        ])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("db", type=Path)
@@ -130,6 +155,7 @@ def main():
     differences = commands.add_parser("differences")
     differences.add_argument("run_id", type=int)
     differences.add_argument("--status", choices=("all", "open", "reviewed"), default="all")
+    differences.add_argument("--format", choices=("json", "csv"), default="json")
     mark_difference = commands.add_parser("mark-difference-reviewed")
     mark_difference.add_argument("run_id", type=int)
     mark_difference.add_argument("transaction_id")
@@ -147,7 +173,12 @@ def main():
                 if args.status != "all":
                     reviewed = args.status == "reviewed"
                     items = [item for item in items if (item["reviewed_at"] is not None) == reviewed]
-                print(json.dumps(items, indent=2))
+                if args.format == "csv":
+                    # csv controls line endings, including on Windows.
+                    sys.stdout.reconfigure(newline="")
+                    write_differences_csv(items, sys.stdout)
+                else:
+                    print(json.dumps(items, indent=2))
             else:
                 note = args.note.strip()
                 if not note:

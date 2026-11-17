@@ -119,3 +119,39 @@ class ReviewWorkflowTests(unittest.TestCase):
             with closing(sqlite3.connect(path)) as db:
                 self.assertEqual([run["id"] for run in list_runs(db)], [keyed, first])
                 self.assertEqual(list_runs(db)[0]["review_note"], "Checked")
+
+    def test_csv_export_escapes_text_and_preserves_amounts(self):
+        from contextlib import closing
+        import csv
+        import io
+        import sqlite3
+
+        from review import mark_difference_reviewed, save_run
+
+        root = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "export.sqlite3"
+            transaction_id = '=SUM(1,2)'
+            run_id = save_run(path, {
+                "matched": 0,
+                "missing_from_settlement": ["OPEN"],
+                "missing_from_ledger": [],
+                "mismatched": [{
+                    "transaction_id": transaction_id,
+                    "ledger": {"amount": "-10.00", "currency": "TRY"},
+                    "settlement": {"amount": "-9.99", "currency": "TRY"},
+                }],
+            })
+            note = '  +1, "checked"\nsecond line'
+            with closing(sqlite3.connect(path)) as db, db:
+                mark_difference_reviewed(db, run_id, transaction_id, note)
+
+            result = subprocess.run([
+                sys.executable, "review.py", str(path), "differences", str(run_id),
+                "--status", "reviewed", "--format", "csv",
+            ], cwd=root, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            row, = csv.DictReader(io.StringIO(result.stdout))
+            self.assertEqual(row["transaction_id"], "'" + transaction_id)
+            self.assertEqual(row["review_note"], "'" + note)
+            self.assertEqual(row["ledger_amount"], "-10.00")

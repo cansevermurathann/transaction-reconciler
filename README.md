@@ -88,3 +88,14 @@ preserves its reviews. Reusing a key with a different report returns exit code
 2 and keeps the original run. The key identifies the report, so differences in
 input files that leave the report unchanged do not cause a conflict.
 Without a key, each save creates a new run.
+
+### Export differences as CSV
+
+```sh
+python review.py review.sqlite3 differences 1 --status open --format csv > open-differences.csv
+```
+
+CSV includes transaction IDs, difference types, available amounts and
+currencies, and review metadata. For spreadsheet display, the export prefixes
+formula-like IDs and notes with an apostrophe. Use the default JSON output for
+unmodified text or machine-to-machine exchange.
